@@ -204,6 +204,11 @@ typedef struct tracee {
      * execve sysexit.  */
     struct load_info *load_info;
 
+    /* Copy of this tracee's auxiliary vector with AT_EXECFN fixed
+     * up, handed out in place of its own /proc/self/auxv.  NULL
+     * until the tracee opens that file.  */
+    char *auxv_path;
+
     /* Disable mixed-execution (native host) check */
     bool mixed_mode;
 
@@ -219,6 +224,16 @@ typedef struct tracee {
 
     /* Ensure the sysexit stage is always hit under seccomp.  */
     bool sysexit_pending;
+
+    /* The no_new_privs flag as this tracee sees it: inherited from
+     * PRoot's caller, or set by the program itself.  The kernel's
+     * flag doesn't tell, since PRoot sets it to install its seccomp
+     * filter.  */
+    bool no_new_privs;
+
+    /* Whether the first program has been executed: PRoot's own
+     * PR_SET_NO_NEW_PRIVS comes before.  */
+    bool seen_execve;
 
 
 	/**********************************************************************
@@ -239,6 +254,12 @@ typedef struct tracee {
     /* Path to the executable, à la /proc/self/exe.  */
     char *exe;
     char *new_exe;
+
+    /* Address of argv[0] in the initial stack.  The loader points
+     * AT_EXECFN there on the stack, but the auxiliary vector the
+     * kernel keeps for PR_GET_AUXV and /proc/self/auxv still points
+     * it to the loader.  0 until the loader is used.  */
+    word_t execfn_addr;
 
 
 	/**********************************************************************

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v3
         with:
           fetch-depth: 0
 
@@ -37,12 +37,19 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -qq libarchive-dev libtalloc-dev pkg-config swig uthash-dev python3-dev lzop
+          sudo apt-get install -qq libarchive-dev libtalloc-dev pkg-config uthash-dev lzop g++
 
       - name: Build static proot and care binaries
         run: |
-          make -C src clean loader.elf loader-m32.elf build.h
-          LDFLAGS="${LDFLAGS} -static" make -C src proot care
+          # WITHOUT_PYTHON=1: swig and python3-config are preinstalled on
+          # GitHub's ubuntu-latest runners regardless of what this workflow
+          # apt-get installs, which would otherwise silently re-enable
+          # proot's optional Python extension. Its static dependencies
+          # (Ubuntu's libpython3.a) don't resolve under -static. Must be
+          # passed to both invocations: build.h bakes in
+          # HAVE_PYTHON_EXTENSION from the first one.
+          make -C src clean loader.elf loader-m32.elf build.h WITHOUT_PYTHON=1
+          LDFLAGS="${LDFLAGS} -static" make -C src proot care WITHOUT_PYTHON=1
 
       - name: Verify the embedded version string matches the tag
         run: |

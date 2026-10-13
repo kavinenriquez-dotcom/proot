@@ -21,9 +21,11 @@
  */
 
 #include <errno.h>		/* errno(3), E* */
+#include <sys/param.h>		/* MIN(), */
 #include <sys/utsname.h>	/* struct utsname, */
 #include <linux/net.h>		/* SYS_*, */
 #include <string.h>		/* strlen(3), */
+#include <unistd.h>		/* readlink(2), */
 
 #include "syscall/syscall.h"
 #include "syscall/sysnum.h"
@@ -32,6 +34,7 @@
 #include "syscall/heap.h"
 #include "syscall/rlimit.h"
 #include "execve/execve.h"
+#include "execve/auxv.h"
 #include "tracee/tracee.h"
 #include "tracee/reg.h"
 #include "tracee/mem.h"
@@ -373,6 +376,20 @@ void translate_syscall_exit(Tracee *tracee)
 		break;
 	    }
 
+	    /* A buffer the kernel filled may hold a target cut short.
+	     * The host path is longer than the guest path it stands
+	     * for, so detranslating the cut one would report a shorter,
+	     * wrong guest path, and callers that grow their buffer only
+	     * when readlink(2) fills it (libglnx, bubblewrap...) would
+	     * take it as complete.  Read the whole target instead.  */
+	    if (old_size == max_size) {
+		ssize_t size =
+		    readlink(referer, referee, sizeof(referee) - 1);
+
+		if (size > 0)
+		    referee[size] = '\0';
+	    }
+
 	    status = detranslate_path(tracee, referee, referer);
 	    if (status < 0)
 		break;
@@ -442,6 +459,48 @@ void translate_syscall_exit(Tracee *tracee)
     case PR_execve:
 	translate_execve_exit(tracee);
 	goto end;
+
+    case PR_prctl:{
+	    word_t option = peek_reg(tracee, ORIGINAL, SYSARG_1);
+
+	    /* PR_GET_AUXV copies out the vector the kernel saved
+	     * for the loader: make its AT_EXECFN name the program,
+	     * as the loader did on the stack.  */
+	    if (option == PR_GET_AUXV) {
+		uint8_t vectors[4096];
+		word_t address;
+		size_t size;
+
+		if ((int) syscall_result < 0 || tracee->execfn_addr == 0)
+		    goto end;
+
+		/* The result is the size of the whole vector, which is
+		 * copied out only as far as the buffer goes.  */
+		address = peek_reg(tracee, ORIGINAL, SYSARG_2);
+		size =
+		    MIN(syscall_result,
+			peek_reg(tracee, ORIGINAL, SYSARG_3));
+		size = MIN(size, sizeof(vectors));
+
+		status = read_data(tracee, vectors, address, size);
+		if (status < 0 || !fix_up_execfn(tracee, vectors, size))
+		    goto end;
+
+		(void) write_data(tracee, address, vectors, size);
+		goto end;
+	    }
+
+	    /* See translate_syscall_enter().  */
+	    if (option == PR_GET_NO_NEW_PRIVS) {
+		if (get_sysnum(tracee, MODIFIED) != PR_void)
+		    goto end;
+
+		status = tracee->no_new_privs ? 1 : 0;
+		break;
+	    }
+
+	    goto end;
+	}
 
     case PR_ptrace:
 	status = translate_ptrace_exit(tracee);

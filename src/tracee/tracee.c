@@ -439,6 +439,8 @@ int new_child(Tracee *parent, word_t clone_flags)
     child->verbose = parent->verbose;
     child->seccomp = parent->seccomp;
     child->sysexit_pending = parent->sysexit_pending;
+    child->no_new_privs = parent->no_new_privs;
+    child->seen_execve = parent->seen_execve;
     child->restart_how = parent->restart_how;
 
     /* If CLONE_VM is set, the calling process and the child
@@ -550,6 +552,7 @@ int new_child(Tracee *parent, word_t clone_flags)
     /* The path to the executable is unshared only once the child
      * process does a call to execve(2).  */
     child->exe = talloc_reference(child, parent->exe);
+    child->execfn_addr = parent->execfn_addr;
 
     child->qemu = talloc_reference(child, parent->qemu);
     child->glue = talloc_reference(child, parent->glue);
