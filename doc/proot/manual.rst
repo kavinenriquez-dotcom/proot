@@ -6,8 +6,8 @@
 ``chroot``, ``mount --bind``, and ``binfmt_misc`` without privilege/setup
 -------------------------------------------------------------------------
 
-:Date: 2026-10-02
-:Version: 5.5.0
+:Date: 2026-09-07
+:Version: 5.4.1
 :Manual section: 1
 
 
@@ -684,4 +684,3 @@ Copyright (C) 2023 PRoot Developers, licensed under GPL v2 or later.
     |  __ \  __ \_____  _____|   |_
     |   __/     /  _  \/  _  \    _|
     |__|  |__|__\_____/\_____/\____|
-
